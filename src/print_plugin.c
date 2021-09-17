@@ -40,9 +40,15 @@
 #include "net_aggr.h"
 #include "ports_aggr.h"
 #include "preprocess-internal.h"
+#include "sys/mman.h"
 
 /* Global variables */
 int print_output_stdout_header;
+
+#if defined(WITH_JANSSON) && defined(WITH_ZMQ)
+struct pt_zmq_host print_output_zmq_host;
+char *pt_buf;
+#endif
 
 /* Functions */
 void print_plugin(int pipe_fd, struct configuration *cfgptr, void *ptr) 
@@ -179,10 +185,32 @@ void print_plugin(int pipe_fd, struct configuration *cfgptr, void *ptr)
 
   print_output_stdout_header = TRUE;
 
-  if (!config.sql_table && config.daemon) {
-    Log(LOG_ERR, "ERROR ( %s/%s ): no print_output_file defined and 'daemonize: true'. Output would be lost. Exiting ..\n", config.name, config.type);
+#if defined(WITH_JANSSON) && defined(WITH_ZMQ)
+  if (!config.sql_table && !config.print_output_zmq_endpoint && config.daemon) {
+    Log(LOG_ERR, "ERROR ( %s/%s ): no print_output_file or print_output_zmq_endpoint defined and 'daemonize: true'. Output would be lost. Exiting ..\n", config.name, config.type);
     exit_gracefully(1);
   }
+
+  if (config.sql_table && config.print_output_zmq_endpoint) {
+    Log(LOG_ERR, "ERROR ( %s/%s ): print_output_file and print_output_zmq_endpoint can't be both defined. Exiting ..\n", config.name, config.type);
+    exit_gracefully(1);
+  }
+
+  if (config.print_output_zmq_endpoint && (!config.print_output || (config.print_output && (config.print_output != PRINT_OUTPUT_JSON)))) {
+    Log(LOG_ERR, "ERROR ( %s/%s ): print_output_zmq_endpoint must be with 'print_output: json'. Exiting ..\n", config.name, config.type);
+    exit_gracefully(1);
+  }
+
+  if (config.print_output_zmq_endpoint && !config.print_output_zmq_topic) {
+    Log(LOG_ERR, "ERROR ( %s/%s ): print_output_zmq_endpoint must be with print_output_zmq_topic. Exiting ..\n", config.name, config.type);
+    exit_gracefully(1);
+  }
+#else
+  if (!config.sql_table && config.daemon) {
+    Log(LOG_ERR, "ERROR ( %s/%s ): no print_output_file and 'daemonize: true'. Output would be lost. Exiting ..\n", config.name, config.type);
+    exit_gracefully(1);
+  }
+#endif
 
   if (!config.sql_table && !config.print_output_lock_file) {
     Log(LOG_WARNING, "WARN ( %s/%s ): no print_output_file and no print_output_lock_file defined.\n", config.name, config.type);
@@ -215,6 +243,19 @@ void print_plugin(int pipe_fd, struct configuration *cfgptr, void *ptr)
   }
 #endif
 
+#if defined(WITH_JANSSON) && defined(WITH_ZMQ)
+  if (config.print_output_zmq_endpoint) {
+    char log_id[SHORTBUFLEN];
+    snprintf(log_id, sizeof(log_id), "%s/%s", config.name, config.type);
+    if (!config.print_output_zmq_hwm) {
+      config.print_output_zmq_hwm = 0;
+    }
+    pt_zmq_pub_init(&print_output_zmq_host, config.print_output_zmq_endpoint, log_id, config.print_output_zmq_topic, config.print_output_zmq_hwm);
+    munmap(pt_buf, 100*LARGEBUFLEN);
+    pt_buf = mmap(NULL, 100*LARGEBUFLEN, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+  }
+#endif
+
   /* plugin main loop */
   for(;;) {
     poll_again:
@@ -241,6 +282,15 @@ void print_plugin(int pipe_fd, struct configuration *cfgptr, void *ptr)
 
     if (idata.now > refresh_deadline) {
       int saved_qq_ptr;
+
+#if defined(WITH_JANSSON) && defined(WITH_ZMQ)
+    if (config.print_output_zmq_endpoint) {
+      if (strlen(pt_buf) != 0) {
+        pt_zmq_send(&print_output_zmq_host, pt_buf, strlen(pt_buf));
+        memset(pt_buf, 0, sizeof(pt_buf));
+      }
+    }
+#endif
 
       saved_qq_ptr = qq_ptr;
       P_cache_handle_flush_event(&pt);
@@ -384,8 +434,10 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
 #endif
 
   if (!index && !config.print_write_empty_file) {
-    Log(LOG_INFO, "INFO ( %s/%s ): *** Purging cache - START (PID: %u) ***\n", config.name, config.type, writer_pid);
-    Log(LOG_INFO, "INFO ( %s/%s ): *** Purging cache - END (PID: %u, QN: 0/0, ET: X) ***\n", config.name, config.type, writer_pid);
+    if (!config.print_output_zmq_endpoint) {
+      Log(LOG_INFO, "INFO ( %s/%s ): *** Purging cache - START (PID: %u) ***\n", config.name, config.type, writer_pid);
+      Log(LOG_INFO, "INFO ( %s/%s ): *** Purging cache - END (PID: %u, QN: 0/0, ET: X) ***\n", config.name, config.type, writer_pid);
+    }
     return;
   }
 
@@ -413,7 +465,9 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
   memcpy(pending_queries_queue, queue, index*sizeof(struct db_cache *));
   pqq_ptr = index;
 
-  Log(LOG_INFO, "INFO ( %s/%s ): *** Purging cache - START (PID: %u) ***\n", config.name, config.type, writer_pid);
+  if (!config.print_output_zmq_endpoint) {
+    Log(LOG_INFO, "INFO ( %s/%s ): *** Purging cache - START (PID: %u) ***\n", config.name, config.type, writer_pid);
+  }
   start = time(NULL);
 
   start:
@@ -494,7 +548,7 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
       if (config.print_markers) {
 	if ((config.print_output & PRINT_OUTPUT_CSV) || (config.print_output & PRINT_OUTPUT_FORMATTED))
 	  fprintf(f, "--START (%u)--\n", writer_pid);
-	else if (config.print_output & PRINT_OUTPUT_JSON) {
+	else if (!config.print_output_zmq_endpoint && config.print_output & PRINT_OUTPUT_JSON) {
 #ifdef WITH_JANSSON
           void *json_obj;
 
@@ -524,7 +578,7 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
     if (config.print_markers) {
       if ((config.print_output & PRINT_OUTPUT_CSV) || (config.print_output & PRINT_OUTPUT_FORMATTED))
         fprintf(stdout, "--START (%u)--\n", writer_pid);
-      else if (config.print_output & PRINT_OUTPUT_JSON) {
+      else if (!config.print_output_zmq_endpoint && config.print_output & PRINT_OUTPUT_JSON) {
 #ifdef WITH_JANSSON
         void *json_obj;
 
@@ -1269,7 +1323,14 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
 	int idx;
 
 	for (idx = 0; idx < N_PRIMITIVES && cjhandler[idx]; idx++) cjhandler[idx](json_obj, queue[j]);
-        if (json_obj) write_and_free_json(f, json_obj);
+        if (json_obj) {
+           if (config.print_output_zmq_endpoint) {
+             pt_save_and_free_json(pt_buf, json_obj, sep, 0);
+	   } 
+	   else {
+	     write_and_free_json(f, json_obj);
+	   }
+	}
 #endif
       }
       else if (f &&
@@ -1319,7 +1380,7 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
   if (f && config.print_markers) {
     if ((config.print_output & PRINT_OUTPUT_CSV) || (config.print_output & PRINT_OUTPUT_FORMATTED))
       fprintf(f, "--END (%u)--\n", writer_pid);
-    else if (config.print_output & PRINT_OUTPUT_JSON) {
+    else if (!config.print_output_zmq_endpoint && config.print_output & PRINT_OUTPUT_JSON) {
 #ifdef WITH_JANSSON
       void *json_obj;
 
@@ -1377,8 +1438,13 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
   /* If we have pending queries then start again */
   if (pqq_ptr) goto start;
 
-  Log(LOG_INFO, "INFO ( %s/%s ): *** Purging cache - END (PID: %u, QN: %u/%u, ET: %lu) ***\n",
+  if (config.print_output_zmq_endpoint) {
+    pt_save_and_free_json(pt_buf, NULL, NULL, saved_index);
+  }
+  else {
+    Log(LOG_INFO, "INFO ( %s/%s ): *** Purging cache - END (PID: %u, QN: %u/%u, ET: %lu) ***\n",
 		config.name, config.type, writer_pid, qn, saved_index, (long)duration);
+  }
 
   if (config.sql_trigger_exec && !safe_action) P_trigger_exec(config.sql_trigger_exec); 
 
@@ -1621,3 +1687,255 @@ void P_fprintf_csv_string(FILE *f, struct pkt_vlen_hdr_primitives *pvlen, pm_cfg
   if (!string_ptr) string_ptr = empty_string;
   fprintf(f, "%s%s", sep, string_ptr);
 }
+
+#if defined(WITH_JANSSON) && defined(WITH_ZMQ)
+void pt_zmq_set_address(struct pt_zmq_host *zmq_host, char *address)
+{
+  char proto[] = "://", tcp_proto[] = "tcp://", inproc_proto[] = "inproc://";
+
+  if (zmq_host && address) {
+    if (!strstr(address, proto)) {
+      snprintf(zmq_host->sock.str, sizeof(zmq_host->sock.str), "tcp://%s", address);
+    }
+    else {
+      if (strstr(address, tcp_proto)) {
+        snprintf(zmq_host->sock.str, sizeof(zmq_host->sock.str), "%s", address);
+      }
+      else if (strstr(address, inproc_proto)) {
+        snprintf(zmq_host->sock_inproc.str, sizeof(zmq_host->sock_inproc.str), "%s", address);
+      }
+      else {
+        Log(LOG_ERR, "ERROR ( %s ): p_zmq_set_address() unsupported protocol in '%s'.\nExiting.\n",
+            zmq_host->log_id, address);
+        exit_gracefully(1);
+      }
+    }
+  }
+}
+
+int pt_zmq_bind(struct pt_zmq_host *zmq_host)
+{ 
+  int ret = 0;
+  size_t sock_strlen;
+
+  if (strlen(zmq_host->sock_inproc.str)) {
+    ret = zmq_bind(zmq_host->sock_inproc.obj, zmq_host->sock_inproc.str);
+  }
+  else if (strlen(zmq_host->sock.str)) {
+    ret = zmq_bind(zmq_host->sock.obj, zmq_host->sock.str);
+  }
+  else {
+    ret = zmq_bind(zmq_host->sock.obj, "tcp://127.0.0.1:*");
+  }
+
+  if (ret == ERR) {
+    Log(LOG_ERR, "ERROR ( %s ): zmq_bind() failed for topic %s: %s\nExiting.\n",
+        zmq_host->log_id, zmq_host->topic, zmq_strerror(errno));
+    exit_gracefully(1);
+  }
+
+  if (!strlen(zmq_host->sock.str) && !strlen(zmq_host->sock_inproc.str)) {
+    sock_strlen = sizeof(zmq_host->sock.str);
+    ret = zmq_getsockopt(zmq_host->sock.obj, ZMQ_LAST_ENDPOINT, zmq_host->sock.str, &sock_strlen);
+    if (ret == ERR) {
+      Log(LOG_ERR, "ERROR ( %s ): zmq_getsockopt() ZMQ_LAST_ENDPOINT failed for topic %s: %s\nExiting.\n",
+          zmq_host->log_id, zmq_host->topic, zmq_strerror(errno));
+      exit_gracefully(1);
+    }
+  }
+  return ret;
+}
+
+void pt_zmq_send_setup(struct pt_zmq_host *zmq_host, int type)
+{
+  int ret, only_one = 1;
+  void *sock, *m_sock;
+
+  if (!zmq_host) return;
+  if (type != ZMQ_PUB && type != ZMQ_PUSH) return;
+
+  if (!zmq_host->ctx) zmq_host->ctx = zmq_ctx_new();
+
+  sock = zmq_socket(zmq_host->ctx, type);
+  if (!sock) {
+    Log(LOG_ERR, "ERROR ( %s ): zmq_socket() failed for topic %s: %s\nExiting.\n",
+        zmq_host->log_id, zmq_host->topic, zmq_strerror(errno));
+    exit_gracefully(1);
+  }
+
+  //zmq_socket_monitor(sock, "inproc://monitor-server", ZMQ_EVENT_ALL);
+  //m_sock = zmq_socket(zmq_host->ctx, ZMQ_PAIR);
+  //if (m_sock) zmq_host->m_sock = m_sock;
+  //zmq_connect(m_sock, "inproc://monitor-server");
+
+  ret = zmq_setsockopt(sock, ZMQ_SNDHWM, &zmq_host->hwm, sizeof(int));
+  if (ret == ERR) {
+    Log(LOG_ERR, "ERROR ( %s ): zmq_setsockopt() ZMQ_SNDHWM failed for topic %s: %s\nExiting.\n",
+        zmq_host->log_id, zmq_host->topic, zmq_strerror(errno));
+    exit_gracefully(1);
+  }
+
+  ret = zmq_setsockopt(sock, ZMQ_BACKLOG, &only_one, sizeof(int));
+  if (ret == ERR) {
+    Log(LOG_ERR, "ERROR ( %s ): zmq_setsockopt() ZMQ_BACKLOG failed for topic %s: %s\nExiting.\n",
+        zmq_host->log_id, zmq_host->topic, zmq_strerror(errno));
+    exit_gracefully(1);
+  }
+
+  if (strlen(zmq_host->sock_inproc.str)) {
+    zmq_host->sock_inproc.obj = sock;
+  }
+  else {
+    zmq_host->sock.obj = sock;
+  }
+
+  pt_zmq_bind(zmq_host);
+
+  Log(LOG_DEBUG, "DEBUG ( %s ): pt_zmq_send_setup() addr=%s\n",
+      zmq_host->log_id, (strlen(zmq_host->sock.str) ? zmq_host->sock.str : zmq_host->sock_inproc.str));
+  //print_monitor_event(zmq_host->m_sock);
+}
+
+int pt_zmq_pub_init(struct pt_zmq_host *zmq_host, char *address, char *log_id, char *topic, int hwm)
+{
+  if (zmq_host) {
+    memset(zmq_host, 0, sizeof(struct pt_zmq_host));
+    pt_zmq_set_address(zmq_host, address);
+    strlcpy(zmq_host->log_id, log_id, sizeof(zmq_host->log_id));
+    strlcpy(zmq_host->topic, topic, sizeof(zmq_host->topic));
+    zmq_host->hwm = hwm;
+  }
+  pt_zmq_send_setup(zmq_host, ZMQ_PUB);
+  return;
+}
+
+int pt_zmq_send(struct pt_zmq_host *zmq_host, void *buf, u_int64_t len)
+{
+  int ret;
+
+  do {
+    ret = zmq_send(zmq_host->sock.obj, zmq_host->topic, sizeof(zmq_host->topic), ZMQ_SNDMORE);
+  } while ((ret == ERR) && (zmq_errno() == EINTR));
+  if (ret == ERR) {
+    Log(LOG_ERR, "ERROR ( %s ): publishing topic to ZMQ: zmq_send(): %s [topic=%s]\n",
+        zmq_host->log_id, zmq_strerror(errno), zmq_host->topic);
+    return ret;
+  }
+
+  do {
+    ret = zmq_send(zmq_host->sock.obj, buf, len, 0);
+  } while ((ret == ERR) && (zmq_errno() == EINTR));
+  if (ret == ERR) {
+    Log(LOG_ERR, "ERROR ( %s ): publishing data to ZMQ: zmq_send(): %s [topic=%s]\n",
+        zmq_host->log_id, zmq_strerror(errno), zmq_host->topic);
+    return ret;
+  }
+
+  return ret;
+}
+
+int pt_save_and_free_json(char *buffer, void *obj, char *separator, int total)
+{
+  char *tmpbuf = NULL;
+
+  if (!buffer) return;
+
+  if (obj) {
+    json_t *json_obj = (json_t *) obj;
+    // delete unecessary key
+    json_object_del(json_obj, "event_type");
+    tmpbuf = json_dumps(json_obj, JSON_PRESERVE_ORDER);
+    json_decref(json_obj);
+  }
+
+  if (tmpbuf) {
+    strcat(buffer, tmpbuf);
+    free(tmpbuf);
+  }
+
+  if (separator) {
+    strcat(buffer, separator);
+  }
+
+  if (total > 0) {
+    char num[10];
+    sprintf(num, "%d", total);  
+    strcat(buffer, num); 
+  }
+}
+
+int get_monitor_event(void *monitor, int *value, char **address)
+{
+ // First frame in message contains event number and value
+ zmq_msg_t msg;
+ zmq_msg_init (&msg);
+ if (zmq_msg_recv (&msg, monitor, 0) == -1)
+ return -1; // Interrupted, presumably
+ assert (zmq_msg_more (&msg));
+
+ uint8_t *data = (uint8_t *) zmq_msg_data (&msg);
+ uint16_t event = *(uint16_t *) (data);
+ if (value)
+ *value = *(uint32_t *) (data + 2);
+
+ // Second frame in message contains event address
+ zmq_msg_init (&msg);
+ if (zmq_msg_recv (&msg, monitor, 0) == -1)
+ return -1; // Interrupted, presumably
+ assert (!zmq_msg_more (&msg));
+
+ if (address) {
+ uint8_t *data = (uint8_t *) zmq_msg_data (&msg);
+ size_t size = zmq_msg_size (&msg);
+ *address = (char *) malloc (size + 1);
+ memcpy (*address, data, size);
+ (*address)[size] = 0;
+ }
+ return event;
+}
+
+int print_monitor_event(void * monitor)
+{
+  int event;
+  event = get_monitor_event(monitor, NULL, NULL);
+  switch (event) {
+    case ZMQ_EVENT_CONNECTED:
+      Log(LOG_INFO, "ZMQ_EVENT_CONNECTED\n");
+      break;
+    case ZMQ_EVENT_CONNECT_DELAYED: 
+      Log(LOG_INFO, "ZMQ_EVENT_CONNECT_DELAYED\n");
+      break;
+    case ZMQ_EVENT_CONNECT_RETRIED:                   
+      Log(LOG_INFO, "ZMQ_EVENT_CONNECT_RETRIED\n");
+      break;
+    case ZMQ_EVENT_LISTENING:                   
+      Log(LOG_INFO, "ZMQ_EVENT_LISTENING\n");
+      break;
+    case ZMQ_EVENT_BIND_FAILED:                   
+      Log(LOG_INFO, "ZMQ_EVENT_BIND_FAILED\n");
+      break;
+    case ZMQ_EVENT_ACCEPTED:                   
+      Log(LOG_INFO, "ZMQ_EVENT_ACCEPTED\n");
+      break;
+    case ZMQ_EVENT_ACCEPT_FAILED:
+      Log(LOG_INFO, "ZMQ_EVENT_ACCEPT_FAILED\n");
+      break;
+    case ZMQ_EVENT_CLOSED:
+      Log(LOG_INFO, "ZMQ_EVENT_CLOSED\n");
+      break;
+    case ZMQ_EVENT_CLOSE_FAILED:
+      Log(LOG_INFO, "ZMQ_EVENT_CLOSE_FAILED\n");
+      break;
+    case ZMQ_EVENT_DISCONNECTED:                   
+      Log(LOG_INFO, "ZMQ_EVENT_DISCONNECTED\n");
+      break;
+    case ZMQ_EVENT_MONITOR_STOPPED:
+      Log(LOG_INFO, "ZMQ_EVENT_MONITOR_STOPPED\n");
+      break;
+    default: 
+      Log(LOG_INFO, "unknown event '%u' or get_monitor_event fail\n", event);
+  }
+  
+  return;
+}
+#endif

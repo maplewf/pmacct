@@ -1127,6 +1127,69 @@ int cfg_key_print_latest_file(char *filename, char *name, char *value_ptr)
   return changes;
 }
 
+int cfg_key_print_output_zmq_endpoint(char *filename, char *name, char *value_ptr)
+{
+  struct plugins_list_entry *list = plugins_list;
+  int changes = 0;
+
+  if (!name) for (; list; list = list->next, changes++) list->cfg.print_output_zmq_endpoint = value_ptr;
+  else {
+    for (; list; list = list->next) {
+      if (!strcmp(name, list->name)) {
+        list->cfg.print_output_zmq_endpoint = value_ptr;
+        changes++;
+        break;
+      }
+    }
+  }
+
+  return changes;
+}
+
+int cfg_key_print_output_zmq_topic(char *filename, char *name, char *value_ptr)
+{
+  struct plugins_list_entry *list = plugins_list;
+  int changes = 0;
+
+  if (!name) for (; list; list = list->next, changes++) list->cfg.print_output_zmq_topic = value_ptr;
+  else {
+    for (; list; list = list->next) {
+      if (!strcmp(name, list->name)) {
+        list->cfg.print_output_zmq_topic = value_ptr;
+        changes++;
+        break;
+      }
+    }
+  }
+
+  return changes;
+}
+
+int cfg_key_print_output_zmq_hwm(char *filename, char *name, char *value_ptr)
+{
+  struct plugins_list_entry *list = plugins_list;
+  int value, changes = 0;
+
+  value = atoi(value_ptr);
+  if (value < 0) {
+    Log(LOG_ERR, "WARN: [%s] 'print_output_zmq_hwm' has to be >= 0.\n", filename);
+    return ERR;
+  }
+
+  if (!name) for (; list; list = list->next, changes++) list->cfg.print_output_zmq_hwm = value;
+  else {
+    for (; list; list = list->next) {
+      if (!strcmp(name, list->name)) {
+        list->cfg.print_output_zmq_hwm = value;
+        changes++;
+        break;
+      }
+    }
+  }
+
+  return changes;
+}
+
 int cfg_key_print_output_file_append(char *filename, char *name, char *value_ptr)
 {
   struct plugins_list_entry *list = plugins_list;

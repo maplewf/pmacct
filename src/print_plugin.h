@@ -25,6 +25,25 @@
 /* includes */
 #include <sys/poll.h>
 
+/* structures */
+
+#if defined(WITH_JANSSON) && defined(WITH_ZMQ)
+struct pt_zmq_sock {
+  void *obj;
+  char str[SHORTBUFLEN];
+};
+
+struct pt_zmq_host {
+  void *ctx;
+  char log_id[SHORTBUFLEN];
+  struct pt_zmq_sock sock;
+  struct pt_zmq_sock sock_inproc;
+  char topic[SHORTBUFLEN];
+  int hwm;
+  void * m_sock;
+};
+#endif
+
 /* prototypes */
 extern void print_plugin(int, struct configuration *, void *);
 extern void P_cache_purge(struct chained_cache *[], int, int);
@@ -34,5 +53,9 @@ extern void P_fprintf_csv_string(FILE *, struct pkt_vlen_hdr_primitives *, pm_cf
 
 /* global variables */
 extern int print_output_stdout_header;
+#if defined(WITH_JANSSON) && defined(WITH_ZMQ)
+extern struct pt_zmq_host print_output_zmq_host;
+extern char *pt_buf;
+#endif
 
 #endif //PRINT_PLUGIN_H

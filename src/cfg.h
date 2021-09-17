@@ -192,6 +192,9 @@ struct configuration {
   char *print_output_file;
   char *print_output_custom_lib;
   char *print_output_custom_cfg_file;
+  char *print_output_zmq_endpoint;
+  char *print_output_zmq_topic;
+  int print_output_zmq_hwm;
   char *print_latest_file;
   int nfacctd_port;
   char *nfacctd_ip;
