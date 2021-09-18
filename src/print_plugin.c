@@ -1841,11 +1841,42 @@ int pt_save_and_free_json(char *buffer, void *obj, char *separator, int total)
   if (!buffer) return;
 
   if (obj) {
-    json_t *json_obj = (json_t *) obj;
+    char iface_in_str[IFNAMSIZ], iface_out_str[IFNAMSIZ];
+    int iface_int;
+    json_t *json_obj = (json_t *) obj, *iface_in_json, *iface_out_json;
     // delete unecessary key
     json_object_del(json_obj, "event_type");
+    // handle interface and direction if necessary
+    iface_in_json = json_object_get(json_obj, "iface_in");
+    if (iface_in_json) {
+      iface_int = 0;
+      iface_int = json_integer_value(iface_in_json);
+      if (iface_int > 0) {
+        char *in = if_indextoname((unsigned int)iface_int, iface_in_str);
+        if (in) {
+          json_object_set_new_nocheck(obj, "direction", json_string("in"));
+          json_object_set_new_nocheck(obj, "iface", json_string(iface_in_str));
+        }
+      }
+      json_object_del(json_obj, "iface_in");
+    }
+    iface_out_json = json_object_get(json_obj, "iface_out");
+    if (iface_out_json) {
+      iface_int = 0;
+      iface_int = json_integer_value(iface_out_json);
+      if (iface_int > 0) {
+        char *out = if_indextoname((unsigned int)iface_int, iface_out_str);
+        if (out) {
+          json_object_set_new_nocheck(obj, "direction", json_string("out"));
+          json_object_set_new_nocheck(obj, "iface", json_string(iface_out_str));
+        }
+      }
+      json_object_del(json_obj, "iface_out");
+    }
     tmpbuf = json_dumps(json_obj, JSON_PRESERVE_ORDER);
     json_decref(json_obj);
+    json_decref(iface_in_json);
+    json_decref(iface_out_json);
   }
 
   if (tmpbuf) {
