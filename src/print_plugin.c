@@ -1325,7 +1325,9 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
 	for (idx = 0; idx < N_PRIMITIVES && cjhandler[idx]; idx++) cjhandler[idx](json_obj, queue[j]);
         if (json_obj) {
            if (config.print_output_zmq_endpoint) {
+#ifdef WITH_ZMQ
              pt_save_and_free_json(pt_buf, json_obj, sep, 0);
+#endif
 	   } 
 	   else {
 	     write_and_free_json(f, json_obj);
@@ -1439,7 +1441,9 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
   if (pqq_ptr) goto start;
 
   if (config.print_output_zmq_endpoint) {
+#if defined(WITH_JANSSON) && defined(WITH_ZMQ)
     pt_save_and_free_json(pt_buf, NULL, NULL, saved_index);
+#endif
   }
   else {
     Log(LOG_INFO, "INFO ( %s/%s ): *** Purging cache - END (PID: %u, QN: %u/%u, ET: %lu) ***\n",
