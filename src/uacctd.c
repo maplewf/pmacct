@@ -71,13 +71,30 @@ static int nflog_incoming(struct nflog_g_handle *gh, struct nfgenmsg *nfmsg,
   hdr.caplen = MIN(pkt_len, config.snaplen);
   hdr.len = pkt_len;
 
-  cb_data->ifindex_in = nflog_get_physindev(nfa);
-  if (cb_data->ifindex_in == 0)
-    cb_data->ifindex_in = nflog_get_indev(nfa);
+  char *prefix = NULL;
+  char delim[] = "_";
+  prefix = nflog_get_prefix(nfa);
+  /* Try to get interface and direction from prefix in first */
+  if ((strlen(prefix) > 0) && (strstr(prefix, delim) != NULL)) {
+      char *dir = strtok(prefix, delim);
+      char *in = "in";
+      u_int32_t iface = if_nametoindex(strtok(NULL, delim));
+      if (strcmp(dir, in) == 0) {
+          cb_data->ifindex_out = 0;
+          cb_data->ifindex_in = iface;
+      } else {
+          cb_data->ifindex_in = 0;
+          cb_data->ifindex_out = iface;
+      }
+  } else {
+        cb_data->ifindex_in = nflog_get_physindev(nfa);
+        if (cb_data->ifindex_in == 0)
+            cb_data->ifindex_in = nflog_get_indev(nfa);
 
-  cb_data->ifindex_out = nflog_get_physoutdev(nfa);
-  if (cb_data->ifindex_out == 0)
-    cb_data->ifindex_out = nflog_get_outdev(nfa);
+        cb_data->ifindex_out = nflog_get_physoutdev(nfa);
+        if (cb_data->ifindex_out == 0)
+            cb_data->ifindex_out = nflog_get_outdev(nfa);
+  }
 
 #if defined (HAVE_L2)
   ssize_t req_len = hdr.caplen + (mac_len ? mac_len : ETHER_HDRLEN);
