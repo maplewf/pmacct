@@ -598,6 +598,8 @@ struct configuration {
   char *tee_kafka_config_file;
   int uacctd_group;
   int uacctd_nl_size;
+  int uacctd_nl_skt_size;
+  int uacctd_nl_timeout;
   int uacctd_threshold;
   char *tunnel0;
   int use_ip_next_hop;

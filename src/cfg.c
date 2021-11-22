@@ -630,6 +630,8 @@ static const struct _dictionary_line dictionary[] = {
 #endif
   {"uacctd_group", cfg_key_uacctd_group},
   {"uacctd_nl_size", cfg_key_uacctd_nl_size},
+  {"uacctd_nl_skt_size", cfg_key_uacctd_nl_skt_size},
+  {"uacctd_nl_timeout", cfg_key_uacctd_nl_timeout},
   {"uacctd_threshold", cfg_key_uacctd_threshold},
   {"tunnel_0", cfg_key_tunnel_0},
   {"tmp_asa_bi_flow", cfg_key_tmp_asa_bi_flow},

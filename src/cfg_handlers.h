@@ -505,6 +505,8 @@ extern int cfg_key_geoip_ipv6_file(char *, char *, char *);
 extern int cfg_key_geoipv2_file(char *, char *, char *);
 extern int cfg_key_uacctd_group(char *, char *, char *);
 extern int cfg_key_uacctd_nl_size(char *, char *, char *);
+extern int cfg_key_uacctd_nl_skt_size(char *, char *, char *);
+extern int cfg_key_uacctd_nl_timeout(char *, char *, char *);
 extern int cfg_key_uacctd_threshold(char *, char *, char *);
 extern int cfg_key_tunnel_0(char *, char *, char *);
 extern int cfg_key_dump_max_writers(char *, char *, char *);

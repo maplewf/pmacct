@@ -6470,6 +6470,28 @@ int cfg_key_uacctd_nl_size(char *filename, char *name, char *value_ptr)
   return changes;
 }
 
+int cfg_key_uacctd_nl_skt_size(char *filename, char *name, char *value_ptr)
+{ 
+  struct plugins_list_entry *list = plugins_list;
+  int value, changes = 0;
+  
+  value = atoi(value_ptr);
+  
+  for (; list; list = list->next, changes++) list->cfg.uacctd_nl_skt_size = value;
+  return changes;
+}
+
+int cfg_key_uacctd_nl_timeout(char *filename, char *name, char *value_ptr)
+{
+  struct plugins_list_entry *list = plugins_list;
+  int value, changes = 0;
+
+  value = atoi(value_ptr);
+
+  for (; list; list = list->next, changes++) list->cfg.uacctd_nl_timeout = value;
+  return changes;
+}
+
 int cfg_key_uacctd_threshold(char *filename, char *name, char *value_ptr)
 {
   struct plugins_list_entry *list = plugins_list;

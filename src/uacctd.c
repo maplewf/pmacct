@@ -884,12 +884,31 @@ int main(int argc,char **argv, char **envp)
     exit_gracefully(1);
   }
 
-  /* Set buffer size */
+  /* Set kernel buffer size */
   if (nflog_set_nlbufsiz(nfgh, config.uacctd_nl_size) < 0) {
-    Log(LOG_ERR, "ERROR ( %s/core ): Failed to set receive buffer size to %d\n", config.name, config.uacctd_nl_size);
+    Log(LOG_ERR, "ERROR ( %s/core ): Failed to set kernel receive buffer size to %d\n", config.name, config.uacctd_nl_size);
     nflog_unbind_group(nfgh);
     nflog_close(nfh);
     exit_gracefully(1);
+  }
+
+  /* Set socket buffer size: normally it should be larger than kernel buffer size */
+  if (!config.uacctd_nl_skt_size) config.uacctd_nl_skt_size = config.uacctd_nl_size*128;
+  if (nfnl_rcvbufsiz(nfh, config.uacctd_nl_skt_size) < 0) {
+    Log(LOG_ERR, "ERROR ( %s/core ): Failed to set socket receive buffer size to %d\n", config.name, config.uacctd_nl_skt_size);
+    nflog_unbind_group(nfgh);
+    nflog_close(nfh);
+    exit_gracefully(1);
+  }
+
+  /* Set timeout: kernel has n*10ms timeout for nflog, default is 1000ms*/
+  if (config.uacctd_nl_timeout) {
+    if (nflog_set_timeout(nfgh, config.uacctd_nl_timeout/10) < 0) {
+      Log(LOG_ERR, "ERROR ( %s/core ): Failed to set timeout to %d\n", config.name, config.uacctd_nl_timeout);
+      nflog_unbind_group(nfgh);
+      nflog_close(nfh);
+      exit_gracefully(1);
+    }
   }
 
   /* Turn off netlink errors from overrun. */
@@ -897,7 +916,7 @@ int main(int argc,char **argv, char **envp)
     Log(LOG_ERR, "ERROR ( %s/core ): Failed to turn off netlink ENOBUFS\n", config.name);
 
   nflog_callback_register(nfgh, &nflog_incoming, &cb_data);
-  nflog_buffer = malloc(config.uacctd_nl_size);
+  nflog_buffer = malloc(config.uacctd_nl_skt_size);
   if (nflog_buffer == NULL) {
     Log(LOG_ERR, "ERROR ( %s/core ): NFLOG buffer malloc() failed\n", config.name);
     nflog_unbind_group(nfgh);
@@ -1090,8 +1109,11 @@ int main(int argc,char **argv, char **envp)
       }
     }
 
-    len = recv(nflog_fd(nfh), nflog_buffer, config.uacctd_nl_size, 0);
-    if (len < 0) continue;
+    len = recv(nflog_fd(nfh), nflog_buffer, config.uacctd_nl_skt_size, 0);
+    if (len < 0) {
+      Log(LOG_ERR, "ERROR ( %s/core ): socket buffer is full and there are packet dropped in this case\n", config.name);
+      continue;
+    }
     if (nflog_handle_packet(nfh, nflog_buffer, len) != 0) continue;
 
     sigprocmask(SIG_UNBLOCK, &signal_set, NULL);
