@@ -580,8 +580,15 @@ void evaluate_packet_handlers()
     if (channels_list[index].aggregation_2 & COUNT_SAMPLING_DIRECTION) {
       if (config.acct_type == ACCT_PM) channels_list[index].phandler[primitives] = sampling_direction_handler;
       else if (config.acct_type == ACCT_NF) channels_list[index].phandler[primitives] = NF_sampling_direction_handler;
-      else if (config.acct_type == ACCT_NF) channels_list[index].phandler[primitives] = SF_sampling_direction_handler;
+      else if (config.acct_type == ACCT_SF) channels_list[index].phandler[primitives] = SF_sampling_direction_handler;
       primitives++;
+    }
+
+    if (channels_list[index].aggregation_2 & COUNT_ADD_INFO) {
+        if (config.acct_type == ACCT_PM) channels_list[index].phandler[primitives] = add_info_handler;
+        else if (config.acct_type == ACCT_NF) channels_list[index].phandler[primitives] = NF_add_info_handler;
+        else if (config.acct_type == ACCT_SF) channels_list[index].phandler[primitives] = SF_add_info_handler;
+        primitives++;
     }
 
 #if defined (WITH_GEOIP)
@@ -1654,6 +1661,12 @@ void sampling_direction_handler(struct channels_list_entry *chptr, struct packet
   /* dummy */
   pdata->primitives.sampling_direction[0] = 'u';
   pdata->primitives.sampling_direction[1] = '\0';
+}
+
+void add_info_handler(struct channels_list_entry *chptr, struct packet_ptrs *pptrs, char **data)
+{
+    struct pkt_data *pdata = (struct pkt_data *) *data;
+    strlcpy(pdata->primitives.add_info, pptrs->add_info, sizeof(pdata->primitives.add_info));
 }
 
 void mpls_vpn_rd_frommap_handler(struct channels_list_entry *chptr, struct packet_ptrs *pptrs, char **data)
@@ -3027,6 +3040,14 @@ void NF_sampling_direction_handler(struct channels_list_entry *chptr, struct pac
   }
 
   pdata->primitives.sampling_direction[1] = '\0';
+}
+
+void NF_add_info_handler(struct channels_list_entry *chptr, struct packet_ptrs *pptrs, char **data)
+{
+    struct pkt_data *pdata = (struct pkt_data *) *data;
+
+    /* dummy */
+    strlcpy(pdata->primitives.add_info, "dummy", sizeof(pdata->primitives.add_info));
 }
 
 void NF_timestamp_start_handler(struct channels_list_entry *chptr, struct packet_ptrs *pptrs, char **data)
@@ -5198,6 +5219,14 @@ void SF_sampling_direction_handler(struct channels_list_entry *chptr, struct pac
   /* dummy */
   pdata->primitives.sampling_direction[0] = 'u';
   pdata->primitives.sampling_direction[1] = '\0';
+}
+
+void SF_add_info_handler(struct channels_list_entry *chptr, struct packet_ptrs *pptrs, char **data)
+{
+    struct pkt_data *pdata = (struct pkt_data *) *data;
+
+    /* dummy */
+    strlcpy(pdata->primitives.add_info, "dummy", sizeof(pdata->primitives.add_info));
 }
 
 void SF_timestamp_arrival_handler(struct channels_list_entry *chptr, struct packet_ptrs *pptrs, char **data)

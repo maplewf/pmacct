@@ -388,6 +388,7 @@ struct packet_ptrs {
   u_int8_t renormalized; /* Is it renormalized yet ? */
   u_char *pkt_data_ptrs[CUSTOM_PRIMITIVE_MAX_PPTRS_IDX]; /* indexed packet pointers */
   u_int16_t pkt_proto[CUSTOM_PRIMITIVE_MAX_PPTRS_IDX]; /* indexed packet protocols */
+  char *add_info; /* additional info */
 #if defined (WITH_GEOIPV2)
   MMDB_lookup_result_s geoipv2_src;
   MMDB_lookup_result_s geoipv2_dst;
@@ -456,6 +457,7 @@ struct pkt_primitives {
   pm_class_t class;
   u_int32_t sampling_rate;
   char sampling_direction[2]; /* 'i' = ingress, 'e' = egress, 'u' = unknown */
+  char add_info[20]; /* <direction>_<interface> */
   u_int32_t export_proto_seqno;
   u_int16_t export_proto_version;
   u_int32_t export_proto_sysid;

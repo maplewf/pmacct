@@ -85,6 +85,11 @@ void pm_pcap_cb(u_char *user, const struct pcap_pkthdr *pkthdr, const u_char *bu
       tpptrs->flow_type.traffic_type = PM_FTYPE_TRAFFIC;
     }
 
+    /* add_info */
+    if (cb_data->add_info) {
+        pptrs.add_info = cb_data->add_info;
+    }
+
     /* direction */
     if (cb_data->device &&
 	cb_data->device->pcap_if &&

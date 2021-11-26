@@ -195,6 +195,7 @@ struct configuration {
   char *print_output_zmq_endpoint;
   char *print_output_zmq_topic;
   int print_output_zmq_hwm;
+  int print_output_zmq_write_buffer;
   char *print_latest_file;
   int nfacctd_port;
   char *nfacctd_ip;

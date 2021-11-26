@@ -134,6 +134,7 @@ static const struct _dictionary_line dictionary[] = {
   {"print_output_custom_lib", cfg_key_print_output_custom_lib},
   {"print_output_custom_cfg_file", cfg_key_print_output_custom_cfg_file},
   {"print_output_zmq_endpoint", cfg_key_print_output_zmq_endpoint},
+  {"print_output_zmq_write_buffer", cfg_key_print_output_zmq_write_buffer},
   {"print_output_zmq_topic", cfg_key_print_output_zmq_topic},
   {"print_output_zmq_hwm", cfg_key_print_output_zmq_hwm},
   {"print_write_empty_file", cfg_key_print_write_empty_file},

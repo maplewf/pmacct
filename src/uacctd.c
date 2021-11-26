@@ -72,20 +72,10 @@ static int nflog_incoming(struct nflog_g_handle *gh, struct nfgenmsg *nfmsg,
   hdr.len = pkt_len;
 
   char *prefix = NULL;
-  char delim[] = "_";
   prefix = nflog_get_prefix(nfa);
   /* Try to get interface and direction from prefix in first */
-  if ((strlen(prefix) > 0) && (strstr(prefix, delim) != NULL)) {
-      char *dir = strtok(prefix, delim);
-      char *in = "in";
-      u_int32_t iface = if_nametoindex(strtok(NULL, delim));
-      if (strcmp(dir, in) == 0) {
-          cb_data->ifindex_out = 0;
-          cb_data->ifindex_in = iface;
-      } else {
-          cb_data->ifindex_in = 0;
-          cb_data->ifindex_out = iface;
-      }
+  if (prefix && (strlen(prefix) > 0)) {
+      cb_data->add_info = prefix;
   } else {
         cb_data->ifindex_in = nflog_get_physindev(nfa);
         if (cb_data->ifindex_in == 0)
@@ -894,7 +884,7 @@ int main(int argc,char **argv, char **envp)
 
   /* Set socket buffer size: normally it should be larger than kernel buffer size */
   if (!config.uacctd_nl_skt_size) config.uacctd_nl_skt_size = config.uacctd_nl_size*128;
-  if (nfnl_rcvbufsiz(nfh, config.uacctd_nl_skt_size) < 0) {
+  if (nfnl_rcvbufsiz(nflog_nfnlh(nfh), config.uacctd_nl_skt_size) < 0) {
     Log(LOG_ERR, "ERROR ( %s/core ): Failed to set socket receive buffer size to %d\n", config.name, config.uacctd_nl_skt_size);
     nflog_unbind_group(nfgh);
     nflog_close(nfh);

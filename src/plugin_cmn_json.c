@@ -332,6 +332,11 @@ void compose_json(u_int64_t wtc, u_int64_t wtc_2)
     idx++;
   }
 
+  if (wtc_2 & COUNT_ADD_INFO) {
+    cjhandler[idx] = compose_json_add_info;
+    idx++;
+  }
+
   if (wtc_2 & COUNT_POST_NAT_SRC_HOST) {
     cjhandler[idx] = compose_json_post_nat_src_host;
     idx++;
@@ -940,6 +945,12 @@ void compose_json_sampling_direction(json_t *obj, struct chained_cache *cc)
 {
   json_object_set_new_nocheck(obj, "sampling_direction", json_string(cc->primitives.sampling_direction));
 }
+
+void compose_json_add_info(json_t *obj, struct chained_cache *cc)
+{
+  json_object_set_new_nocheck(obj, "add_info", json_string(cc->primitives.add_info));
+}
+
 
 void compose_json_post_nat_src_host(json_t *obj, struct chained_cache *cc)
 {

@@ -151,6 +151,7 @@ extern int cfg_key_print_output_custom_cfg_file(char *, char *, char *);
 extern int cfg_key_print_output_zmq_endpoint(char *, char *, char *);
 extern int cfg_key_print_output_zmq_topic(char *, char *, char *);
 extern int cfg_key_print_output_zmq_hwm(char *, char *, char *);
+extern int cfg_key_print_output_zmq_write_buffer(char *, char *, char *);
 extern int cfg_key_print_latest_file(char *, char *, char *);
 extern int cfg_key_nfacctd_port(char *, char *, char *);
 extern int cfg_key_nfacctd_ip(char *, char *, char *);

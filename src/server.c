@@ -555,7 +555,9 @@ void mask_elem(struct pkt_primitives *d1, struct pkt_bgp_primitives *d2, struct 
 #endif
 
   if (w2 & COUNT_SAMPLING_RATE) d1->sampling_rate = s1->sampling_rate; 
-  if (w2 & COUNT_SAMPLING_DIRECTION) memcpy(&d1->sampling_direction, &s1->sampling_direction, sizeof(d1->sampling_direction)); 
+  if (w2 & COUNT_SAMPLING_DIRECTION) memcpy(&d1->sampling_direction, &s1->sampling_direction, sizeof(d1->sampling_direction));
+
+  if (w2 & COUNT_ADD_INFO) memcpy(&d1->add_info, &s1->add_info, sizeof(d1->add_info));
 
   if (extras->off_pkt_bgp_primitives && s2) {
     if (w & COUNT_LOCAL_PREF) d2->local_pref = s2->local_pref;

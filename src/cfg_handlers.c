@@ -247,6 +247,7 @@ int cfg_key_aggregate(char *filename, char *name, char *value_ptr)
     else if (!strcmp(count_token, "src_port")) cfg_set_aggregate(filename, value, COUNT_INT_SRC_PORT, count_token);
     else if (!strcmp(count_token, "dst_port")) cfg_set_aggregate(filename, value, COUNT_INT_DST_PORT, count_token);
     else if (!strcmp(count_token, "proto")) cfg_set_aggregate(filename, value, COUNT_INT_IP_PROTO, count_token);
+    else if (!strcmp(count_token, "add_info")) cfg_set_aggregate(filename, value, COUNT_INT_ADD_INFO, count_token);
 #if defined (HAVE_L2)
     else if (!strcmp(count_token, "src_mac")) cfg_set_aggregate(filename, value, COUNT_INT_SRC_MAC, count_token);
     else if (!strcmp(count_token, "dst_mac")) cfg_set_aggregate(filename, value, COUNT_INT_DST_MAC, count_token);
@@ -1188,6 +1189,31 @@ int cfg_key_print_output_zmq_hwm(char *filename, char *name, char *value_ptr)
   }
 
   return changes;
+}
+
+int cfg_key_print_output_zmq_write_buffer(char *filename, char *name, char *value_ptr)
+{
+    struct plugins_list_entry *list = plugins_list;
+    int value, changes = 0;
+
+    value = atoi(value_ptr);
+    if (value < 0) {
+        Log(LOG_ERR, "WARN: [%s] 'print_output_zmq_write_buffer' has to be >= 0.\n", filename);
+        return ERR;
+    }
+
+    if (!name) for (; list; list = list->next, changes++) list->cfg.print_output_zmq_write_buffer = value;
+    else {
+        for (; list; list = list->next) {
+            if (!strcmp(name, list->name)) {
+                list->cfg.print_output_zmq_write_buffer = value;
+                changes++;
+                break;
+            }
+        }
+    }
+
+    return changes;
 }
 
 int cfg_key_print_output_file_append(char *filename, char *name, char *value_ptr)

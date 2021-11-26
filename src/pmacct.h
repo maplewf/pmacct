@@ -315,6 +315,7 @@ struct pm_pcap_callback_data {
   u_int32_t ifindex_out;
   u_int8_t has_tun_prims;
   struct pm_pcap_callback_signals sig;
+  char *add_info;
 };
 
 struct pm_dump_runner {

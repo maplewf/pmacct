@@ -62,6 +62,7 @@ extern void in_iface_handler(struct channels_list_entry *, struct packet_ptrs *,
 extern void out_iface_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void sampling_rate_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void sampling_direction_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
+extern void add_info_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void timestamp_start_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void timestamp_arrival_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void custom_primitives_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
@@ -99,6 +100,7 @@ extern void NF_in_iface_handler(struct channels_list_entry *, struct packet_ptrs
 extern void NF_out_iface_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void NF_sampling_rate_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void NF_sampling_direction_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
+extern void NF_add_info_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void NF_post_nat_src_host_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void NF_post_nat_dst_host_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void NF_post_nat_src_port_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
@@ -169,6 +171,7 @@ extern void SF_in_iface_handler(struct channels_list_entry *, struct packet_ptrs
 extern void SF_out_iface_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void SF_sampling_rate_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void SF_sampling_direction_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
+extern void SF_add_info_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void SF_sampling_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void SF_timestamp_arrival_handler(struct channels_list_entry *, struct packet_ptrs *, char **);
 extern void SF_sequence_number_handler(struct channels_list_entry *, struct packet_ptrs *, char **);

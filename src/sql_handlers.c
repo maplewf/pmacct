@@ -273,6 +273,14 @@ void count_sampling_direction_handler(const struct db_cache *cache_elem, struct 
   *ptr_values += strlen(*ptr_values);
 }
 
+void count_add_info_handler(const struct db_cache *cache_elem, struct insert_data *idata, int num, char **ptr_values, char **ptr_where)
+{
+    snprintf(*ptr_where, SPACELEFT(where_clause), where[num].string, cache_elem->primitives.add_info);
+    snprintf(*ptr_values, SPACELEFT(values_clause), values[num].string, cache_elem->primitives.add_info);
+    *ptr_where += strlen(*ptr_where);
+    *ptr_values += strlen(*ptr_values);
+}
+
 void count_post_nat_src_ip_handler(const struct db_cache *cache_elem, struct insert_data *idata, int num, char **ptr_values, char **ptr_where)
 {
   char ptr[INET6_ADDRSTRLEN];

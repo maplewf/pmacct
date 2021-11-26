@@ -251,8 +251,12 @@ void print_plugin(int pipe_fd, struct configuration *cfgptr, void *ptr)
       config.print_output_zmq_hwm = 0;
     }
     pt_zmq_pub_init(&print_output_zmq_host, config.print_output_zmq_endpoint, log_id, config.print_output_zmq_topic, config.print_output_zmq_hwm);
-    munmap(pt_buf, 100*LARGEBUFLEN);
-    pt_buf = mmap(NULL, 100*LARGEBUFLEN, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    int buf_number = 100;
+    if (config.print_output_zmq_write_buffer) {
+      buf_number = config.print_output_zmq_write_buffer;
+    }
+    munmap(pt_buf, buf_number*LARGEBUFLEN);
+    pt_buf = mmap(NULL, buf_number*LARGEBUFLEN, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
   }
 #endif
 
@@ -422,6 +426,7 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
 #if defined (WITH_NDPI)
   char ndpi_class[SUPERSHORTBUFLEN];
 #endif
+
   FILE *f = NULL, *lockf = NULL;
   int j, stop, is_event = FALSE, qn = 0, go_to_pending, saved_index = index, file_to_be_created;
   time_t start, duration;
@@ -431,6 +436,11 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
   pid_t writer_pid = getpid();
 #ifdef WITH_AVRO
   avro_file_writer_t p_avro_writer;
+#endif
+
+#if defined(WITH_JANSSON) && defined(WITH_ZMQ)
+json_t *pt_array;
+pt_array = json_array();
 #endif
 
   if (!index && !config.print_write_empty_file) {
@@ -783,6 +793,8 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
   
         if (config.what_to_count_2 & COUNT_SAMPLING_RATE) fprintf(f, "%-7u       ", data->sampling_rate);
         if (config.what_to_count_2 & COUNT_SAMPLING_DIRECTION) fprintf(f, "%-1s                   ", data->sampling_direction);
+
+        if (config.what_to_count_2 & COUNT_ADD_INFO) fprintf(f, "%-20s                   ", data->add_info);
   
         if (config.what_to_count_2 & COUNT_POST_NAT_SRC_HOST) {
           addr_to_str(ip_address, &pnat->post_nat_src_ip);
@@ -1181,6 +1193,8 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
   
         if (config.what_to_count_2 & COUNT_SAMPLING_RATE) fprintf(f, "%s%u", write_sep(sep, &count), data->sampling_rate);
         if (config.what_to_count_2 & COUNT_SAMPLING_DIRECTION) fprintf(f, "%s%s", write_sep(sep, &count), data->sampling_direction);
+
+        if (config.what_to_count_2 & COUNT_ADD_INFO) fprintf(f, "%s%s", write_sep(sep, &count), data->add_info);
   
         if (config.what_to_count_2 & COUNT_POST_NAT_SRC_HOST) {
           addr_to_str(src_host, &pnat->post_nat_src_ip);
@@ -1326,7 +1340,7 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
         if (json_obj) {
            if (config.print_output_zmq_endpoint) {
 #ifdef WITH_ZMQ
-             pt_save_and_free_json(pt_buf, json_obj, sep, 0);
+             pt_save_and_free_json(NULL, pt_array, json_obj, NULL, 0);
 #endif
 	   } 
 	   else {
@@ -1442,7 +1456,7 @@ void P_cache_purge(struct chained_cache *queue[], int index, int safe_action)
 
   if (config.print_output_zmq_endpoint) {
 #if defined(WITH_JANSSON) && defined(WITH_ZMQ)
-    pt_save_and_free_json(pt_buf, NULL, NULL, saved_index);
+    pt_save_and_free_json(pt_buf, pt_array, NULL, sep, saved_index);
 #endif
   }
   else {
@@ -1515,6 +1529,7 @@ void P_write_stats_header_formatted(FILE *f, int is_event)
 #endif
   if (config.what_to_count_2 & COUNT_SAMPLING_RATE) fprintf(f, "SAMPLING_RATE ");
   if (config.what_to_count_2 & COUNT_SAMPLING_DIRECTION) fprintf(f, "SAMPLING_DIRECTION ");
+  if (config.what_to_count_2 & COUNT_ADD_INFO) fprintf(f, "ADD_INFO ");
   if (config.what_to_count_2 & COUNT_POST_NAT_SRC_HOST) fprintf(f, "POST_NAT_SRC_IP                                ");
   if (config.what_to_count_2 & COUNT_POST_NAT_DST_HOST) fprintf(f, "POST_NAT_DST_IP                                ");
   if (config.what_to_count_2 & COUNT_POST_NAT_SRC_PORT) fprintf(f, "POST_NAT_SRC_PORT  ");
@@ -1635,6 +1650,7 @@ void P_write_stats_header_csv(FILE *f, int is_event)
 #endif
   if (config.what_to_count_2 & COUNT_SAMPLING_RATE) fprintf(f, "%sSAMPLING_RATE", write_sep(sep, &count));
   if (config.what_to_count_2 & COUNT_SAMPLING_DIRECTION) fprintf(f, "%sSAMPLING_DIRECTION", write_sep(sep, &count));
+  if (config.what_to_count_2 & COUNT_ADD_INFO) fprintf(f, "%sADD_INFO", write_sep(sep, &count));
   if (config.what_to_count_2 & COUNT_POST_NAT_SRC_HOST) fprintf(f, "%sPOST_NAT_SRC_IP", write_sep(sep, &count));
   if (config.what_to_count_2 & COUNT_POST_NAT_DST_HOST) fprintf(f, "%sPOST_NAT_DST_IP", write_sep(sep, &count));
   if (config.what_to_count_2 & COUNT_POST_NAT_SRC_PORT) fprintf(f, "%sPOST_NAT_SRC_PORT", write_sep(sep, &count));
@@ -1838,16 +1854,14 @@ int pt_zmq_send(struct pt_zmq_host *zmq_host, void *buf, u_int64_t len)
   return ret;
 }
 
-int pt_save_and_free_json(char *buffer, void *obj, char *separator, int total)
+int pt_save_and_free_json(char *buffer, json_t *array, void *obj, char *separator, int total)
 {
-  char *tmpbuf = NULL;
-
-  if (!buffer) return;
+  if (!array) return;
 
   if (obj) {
-    char iface_in_str[IFNAMSIZ], iface_out_str[IFNAMSIZ];
+    char iface_in_str[IFNAMSIZ], iface_out_str[IFNAMSIZ], *add_info_str;
     int iface_int;
-    json_t *json_obj = (json_t *) obj, *iface_in_json, *iface_out_json;
+    json_t *json_obj = (json_t *) obj, *iface_in_json, *iface_out_json, *add_info_json;
     // delete unecessary key
     json_object_del(json_obj, "event_type");
     // handle interface and direction if necessary
@@ -1858,8 +1872,8 @@ int pt_save_and_free_json(char *buffer, void *obj, char *separator, int total)
       if (iface_int > 0) {
         char *in = if_indextoname((unsigned int)iface_int, iface_in_str);
         if (in) {
-          json_object_set_new_nocheck(obj, "direction", json_string("in"));
-          json_object_set_new_nocheck(obj, "iface", json_string(iface_in_str));
+          json_object_set_new_nocheck(json_obj, "direction", json_string("in"));
+          json_object_set_new_nocheck(json_obj, "iface", json_string(iface_in_str));
         }
       }
       json_object_del(json_obj, "iface_in");
@@ -1871,31 +1885,37 @@ int pt_save_and_free_json(char *buffer, void *obj, char *separator, int total)
       if (iface_int > 0) {
         char *out = if_indextoname((unsigned int)iface_int, iface_out_str);
         if (out) {
-          json_object_set_new_nocheck(obj, "direction", json_string("out"));
-          json_object_set_new_nocheck(obj, "iface", json_string(iface_out_str));
+          json_object_set_new_nocheck(json_obj, "direction", json_string("out"));
+          json_object_set_new_nocheck(json_obj, "iface", json_string(iface_out_str));
         }
       }
       json_object_del(json_obj, "iface_out");
     }
-    tmpbuf = json_dumps(json_obj, JSON_PRESERVE_ORDER);
-    json_decref(json_obj);
+    add_info_json = json_object_get(json_obj, "add_info");
+    if (add_info_json) {
+      char delim[] = "_";
+      add_info_str = json_string_value(add_info_json);
+      if ((strlen(add_info_str) > 0) && (strstr(add_info_str, delim) != NULL)){
+        json_object_set_new_nocheck(json_obj, "direction", json_string(strtok(add_info_str, delim)));
+        json_object_set_new_nocheck(json_obj, "iface", json_string(strtok(NULL, delim)));
+      }
+      json_object_del(json_obj, "add_info");
+    }
+    json_array_append(array, json_obj);
+    json_decref(add_info_json);
     json_decref(iface_in_json);
     json_decref(iface_out_json);
   }
 
-  if (tmpbuf) {
+  if ((buffer) && (separator) && (total > 0)) {
+    char num[10], *tmpbuf;
+    tmpbuf = json_dumps(array, JSON_PRESERVE_ORDER);
     strcat(buffer, tmpbuf);
-    free(tmpbuf);
-  }
-
-  if (separator) {
     strcat(buffer, separator);
-  }
-
-  if (total > 0) {
-    char num[10];
     sprintf(num, "%d", total);  
-    strcat(buffer, num); 
+    strcat(buffer, num);
+    json_decref(array);
+    free(tmpbuf);
   }
 }
 
